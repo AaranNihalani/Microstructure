@@ -88,11 +88,10 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def websocket_endpoint(websocket: WebSocket):
     await broadcaster.connect(websocket)
     try:
+        # Keep connection alive
         while True:
             await websocket.receive_text()
-    except WebSocketDisconnect:
-        broadcaster.disconnect(websocket)
-    except Exception:
+    except (WebSocketDisconnect, Exception):
         broadcaster.disconnect(websocket)
 
 @app.get("/api/snapshot")

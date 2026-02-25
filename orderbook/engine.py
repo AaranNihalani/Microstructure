@@ -105,6 +105,9 @@ class OrderBook:
         qty = float(trade['q'])
         is_buyer_maker = trade['m']
         
+        # Accumulate volume buckets for VPIN (simplified: just tracking total vol for now)
+        # In a real implementation, we would bucket this by volume bars
+        
         if is_buyer_maker:
             # Seller is Taker -> Sell Trade
             self.cvd -= qty

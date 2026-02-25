@@ -86,3 +86,19 @@ def calculate_ofi_step(
         e_ask = current_ask_qty - prev_ask_qty
         
     return e_bid - e_ask
+
+def calculate_vpin(volume_buckets: List[Tuple[float, float]]) -> float:
+    """
+    Calculate VPIN (Volume-Synchronized Probability of Informed Trading).
+    VPIN = sum(|BuyVol - SellVol|) / sum(BuyVol + SellVol) over n buckets.
+    
+    Args:
+        volume_buckets: List of (buy_vol, sell_vol) tuples.
+    """
+    numerator = sum(abs(buy - sell) for buy, sell in volume_buckets)
+    denominator = sum(buy + sell for buy, sell in volume_buckets)
+    
+    if denominator == 0:
+        return 0.0
+        
+    return numerator / denominator

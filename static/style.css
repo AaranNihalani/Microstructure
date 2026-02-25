@@ -253,6 +253,7 @@ body {
     flex-direction: column;
     gap: 20px;
     height: 100%;
+    overflow: hidden;
 }
 
 .chart-container {
@@ -260,8 +261,8 @@ body {
     border: 1px solid #30363d;
     border-radius: 6px;
     padding: 10px;
-    flex: 1; /* Take up available space */
-    min-height: 200px;
+    height: 35%; /* Fixed percentage height */
+    min-height: 150px;
     display: flex;
     flex-direction: column;
     position: relative;
@@ -284,15 +285,16 @@ body {
     border: 1px solid #30363d;
     border-radius: 6px;
     padding: 10px;
-    flex: 1; /* Take up available space */
+    height: 60%; /* Fixed percentage height */
     min-height: 200px;
     display: flex;
     flex-direction: column;
+    flex-grow: 1;
 }
 
 #heatmap-canvas {
     width: 100%;
-    flex-grow: 1; /* Grow to fill container */
+    height: 100%; /* Fill container */
     background: #0d1117;
     cursor: crosshair;
 }
