@@ -2,7 +2,7 @@ import asyncio
 import json
 import websockets
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from contextlib import asynccontextmanager
 
 from orderbook.engine import OrderBook
@@ -89,6 +89,11 @@ async def websocket_endpoint(websocket: WebSocket):
         broadcaster.disconnect(websocket)
     except Exception:
         broadcaster.disconnect(websocket)
+
+@app.get("/api/snapshot")
+async def get_snapshot():
+    """Returns the current ladder payload as JSON (Polling fallback)."""
+    return JSONResponse(order_book.ladder_payload(depth=10))
 
 @app.get("/")
 async def root():
@@ -287,12 +292,27 @@ async def root():
             border-bottom: 1px dashed #30363d;
             margin: 5px 0;
         }
+        
+        .status-dot {
+            height: 8px;
+            width: 8px;
+            background-color: #30363d;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 5px;
+        }
+        .status-connected { background-color: #238636; }
+        .status-disconnected { background-color: #da3633; }
+        .status-polling { background-color: #e3b341; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="intro-box">
-            <span class="intro-title">Real-Time Microstructure Analysis</span>
+            <span class="intro-title">
+                Real-Time Microstructure Analysis
+                <span id="status-indicator" class="status-dot" title="Connecting..."></span>
+            </span>
             This tool visualizes the high-frequency BTC/USDT order book with advanced metrics. 
             It highlights hidden market pressure using Order Flow Imbalance (OFI), Microprice (Volume-Weighted Price), 
             and Cumulative Volume Delta (CVD) to help identify short-term price direction.
@@ -349,8 +369,10 @@ async def root():
 
     <script>
         const DEPTH = 10;
-        const wsUrl = "ws://" + location.host + "/ws";
+        const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + "/ws";
         let ws;
+        let pollingInterval;
+        let isPolling = false;
 
         // Elements
         const els = {
@@ -363,7 +385,8 @@ async def root():
             imbBar: document.getElementById('imb-bar'),
             asks: document.getElementById('asks-container'),
             bids: document.getElementById('bids-container'),
-            spreadInfo: document.getElementById('spread-info')
+            spreadInfo: document.getElementById('spread-info'),
+            status: document.getElementById('status-indicator')
         };
 
         const askRows = [];
@@ -408,16 +431,53 @@ async def root():
         }
 
         function connect() {
+            if (isPolling) return;
+
             ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                els.status.className = 'status-dot status-connected';
+                els.status.title = 'Connected via WebSocket';
+            };
+
             ws.onmessage = onMessage;
-            ws.onclose = () => setTimeout(connect, 1000);
-            ws.onerror = () => ws.close();
+            
+            ws.onclose = () => {
+                console.log("WebSocket disconnected. Switching to polling...");
+                els.status.className = 'status-dot status-disconnected';
+                startPolling();
+            };
+            
+            ws.onerror = () => {
+                ws.close();
+            };
+        }
+
+        function startPolling() {
+            if (isPolling) return;
+            isPolling = true;
+            els.status.className = 'status-dot status-polling';
+            els.status.title = 'Polling (Fallback Mode)';
+            
+            pollingInterval = setInterval(async () => {
+                try {
+                    const response = await fetch('/api/snapshot');
+                    const data = await response.json();
+                    updateUI(data);
+                    els.status.className = 'status-dot status-polling';
+                } catch (e) {
+                    els.status.className = 'status-dot status-disconnected';
+                }
+            }, 500); // Poll every 500ms
         }
 
         function onMessage(event) {
             const data = JSON.parse(event.data);
             if (data.type !== 'ladder') return;
+            updateUI(data);
+        }
 
+        function updateUI(data) {
             const m = data.metrics;
 
             // Update Header Metrics
