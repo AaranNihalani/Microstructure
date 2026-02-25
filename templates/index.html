@@ -12,135 +12,142 @@
 <body>
     <div id="error-banner"></div>
 
-    <div class="layout-grid">
-        <!-- Left Column: Ladder -->
-        <div class="container">
-            <div class="intro-box">
-                <div class="intro-title">
-                    <span>BTC/USDT Microstructure</span>
+    <div class="dashboard-grid">
+        <!-- LEFT COLUMN: Main Visuals -->
+        <div class="main-column">
+            <!-- Top: Price Chart -->
+            <div class="chart-panel">
+                <div class="chart-title">
+                    BTC/USDT Real-Time
+                    <span style="font-weight: normal; color: #8b949e; font-size: 11px;">
+                        <span style="color: #58a6ff">● Mid</span> | 
+                        <span style="color: #e3b341">● Micro</span>
+                    </span>
                     <div class="status-container">
                         <span id="status-indicator" class="status-dot status-disconnected"></span>
                         <span id="status-text" class="status-tooltip">Disconnected</span>
                     </div>
                 </div>
-                <div>
-                    Advanced order book visualization. 
-                    <strong>OFI</strong> (Order Flow Imbalance) predicts short-term pressure.
-                    <strong>Microprice</strong> shows the volume-weighted "true" price.
-                    <strong>CVD</strong> (Cumulative Volume Delta) shows aggressive buyer/seller dominance.
-                </div>
+                <div id="price-chart"></div>
             </div>
 
-            <!-- New Insights Section -->
-            <div class="intro-box" style="background: #1c2128; border-color: #444c56;">
-                <div class="intro-title" style="color: #58a6ff;">Real-Time Insights</div>
-                <div id="insights-text" style="font-size: 13px; white-space: pre-line;">Waiting for data...</div>
-            </div>
+            <!-- Bottom: Metrics Deck -->
+            <div class="metrics-panel">
+                <!-- Insights Ticker -->
+                <div id="insights-text" class="insights-ticker">
+                    System Initializing... Waiting for market data.
+                </div>
 
-            <!-- Paper Trading Section -->
-            <div class="intro-box" style="background: #0d1117; border-color: #30363d;">
-                <div class="intro-title" style="color: #238636;">Paper Trading (Simulated)</div>
-                <div class="portfolio-grid">
-                     <div>USD: <span id="pt-usd" style="color: #f0f6fc; font-weight: bold;">--</span></div>
-                     <div>BTC: <span id="pt-btc" style="color: #f0f6fc; font-weight: bold;">--</span></div>
-                     <div>Equity: <span id="pt-equity" style="color: #f0f6fc; font-weight: bold;">--</span></div>
+                <!-- Hero Metrics -->
+                <div class="hero-metrics-grid">
+                    <div class="hero-metric">
+                        <div class="hero-label" data-tooltip="Spread cost">Spread</div>
+                        <div id="spread" class="hero-value" style="font-size: 18px; color: #8b949e;">--</div>
+                    </div>
+                    <div class="hero-metric">
+                        <div class="hero-label">Mid Price</div>
+                        <div id="mid" class="hero-value" style="color: #58a6ff;">--</div>
+                    </div>
+                    <div class="hero-metric">
+                        <div class="hero-label">Microprice</div>
+                        <div id="micro" class="hero-value" style="color: #e3b341;">--</div>
+                    </div>
+                    <div class="hero-metric">
+                        <div class="hero-label">Imbalance</div>
+                        <div id="imb" class="hero-value">--</div>
+                    </div>
+                    <div class="hero-metric">
+                        <div class="hero-label">OFI (50)</div>
+                        <div id="ofi" class="hero-value">--</div>
+                    </div>
+                    <div class="hero-metric">
+                        <div class="hero-label">CVD</div>
+                        <div id="cvd" class="hero-value">--</div>
+                    </div>
                 </div>
-                <div class="trade-controls">
-                     <button onclick="placeOrder('buy')">Buy 0.01 BTC</button>
-                     <button onclick="placeOrder('sell')">Sell 0.01 BTC</button>
-                     <button onclick="resetAccount()" style="background: #484f58;">Reset</button>
-                </div>
-                <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
-                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" id="auto-trade-toggle" style="cursor: pointer;">
-                        <label for="auto-trade-toggle" style="font-size: 13px; color: #e6edf3; cursor: pointer;">Enable Auto-Trading (HFT)</label>
-                     </div>
-                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" id="fees-toggle" style="cursor: pointer;" checked>
-                        <label for="fees-toggle" style="font-size: 13px; color: #e6edf3; cursor: pointer;">Enable Fees</label>
-                     </div>
-                </div>
-            </div>
-        
-            <div class="header-grid">
-                <div class="metric-box">
-                    <div class="metric-label" data-tooltip="Best Ask - Best Bid. The cost of immediate execution.">Spread</div>
-                    <div id="spread" class="metric-value">--</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label" data-tooltip="(Bid + Ask) / 2. The simple middle price.">Mid Price</div>
-                    <div id="mid" class="metric-value">--</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label" data-tooltip="Volume-weighted Mid Price. Pulls towards the side with less liquidity (more likely to move there).">Microprice</div>
-                    <div id="micro" class="metric-value" style="color: #e3b341;">--</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label" data-tooltip="Order Book Imbalance [-1, 1]. Positive = Buy Pressure (More Bid Vol).">Imbalance</div>
-                    <div id="imb" class="metric-value">--</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label" data-tooltip="Order Flow Imbalance (Rolling). Net flow of limit orders adding pressure. >0 Buy, <0 Sell.">OFI (50)</div>
-                    <div id="ofi" class="metric-value">--</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label" data-tooltip="Cumulative Volume Delta. Net buying (taker) volume since start.">CVD</div>
-                    <div id="cvd" class="metric-value">--</div>
-                </div>
-            </div>
-
-            <div class="imbalance-section">
-                <div class="imbalance-label">
-                    <span>Sell Pressure</span>
-                    <span>Buy Pressure</span>
-                </div>
-                <div class="imbalance-container">
+                
+                <!-- Pressure Bar -->
+                <div class="imbalance-container" style="height: 4px; margin-top: 5px; background: #21262d;">
                     <div id="imb-bar" class="imbalance-bar"></div>
                 </div>
             </div>
+        </div>
 
-            <div id="ladder" class="ladder">
-                <div class="ladder-header">
+        <!-- RIGHT COLUMN: Sidebar -->
+        <div class="sidebar-column">
+            <!-- Trading Panel -->
+            <div class="trading-panel">
+                <div class="intro-title" style="margin-bottom: 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">
+                    Paper Execution
+                </div>
+                
+                <div class="portfolio-grid" style="grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; background: transparent; padding: 0;">
+                    <div style="background: #161b22; padding: 8px; border-radius: 4px; border: 1px solid #30363d;">
+                        <div style="font-size: 10px; color: #8b949e;">USD Balance</div>
+                        <div id="pt-usd" style="font-size: 14px; font-weight: bold; color: #f0f6fc;">--</div>
+                    </div>
+                    <div style="background: #161b22; padding: 8px; border-radius: 4px; border: 1px solid #30363d;">
+                        <div style="font-size: 10px; color: #8b949e;">BTC Position</div>
+                        <div id="pt-btc" style="font-size: 14px; font-weight: bold; color: #f0f6fc;">--</div>
+                    </div>
+                </div>
+                <div style="margin-bottom: 12px; font-size: 12px; display: flex; justify-content: space-between; border-bottom: 1px dashed #30363d; padding-bottom: 8px;">
+                    <span style="color: #8b949e;">Total Equity</span>
+                    <span id="pt-equity" style="font-weight: bold; color: #7ee787;">--</span>
+                </div>
+
+                <div class="trade-controls" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <button onclick="placeOrder('buy')" class="glow-btn buy-btn">BUY 0.01</button>
+                    <button onclick="placeOrder('sell')" class="glow-btn sell-btn">SELL 0.01</button>
+                </div>
+                
+                <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                           <input type="checkbox" id="auto-trade-toggle" style="cursor: pointer;">
+                           <label for="auto-trade-toggle" style="font-size: 11px; color: #8b949e; cursor: pointer;">HFT Auto</label>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                           <input type="checkbox" id="fees-toggle" style="cursor: pointer;" checked>
+                           <label for="fees-toggle" style="font-size: 11px; color: #8b949e; cursor: pointer;">Fees</label>
+                        </div>
+                    </div>
+                    <button onclick="resetAccount()" style="background: transparent; border: 1px solid #30363d; color: #8b949e; font-size: 10px; padding: 2px 6px; border-radius: 4px; cursor: pointer;">Reset</button>
+                </div>
+            </div>
+
+            <!-- Ladder Panel -->
+            <div class="ladder-panel">
+                <div class="ladder-header" style="background: #161b22; padding: 8px 10px; margin: 0; border-bottom: 1px solid #30363d;">
                     <div class="header-cell price">Price</div>
                     <div class="header-cell size">Size</div>
-                    <div class="header-cell total">Visual Depth</div>
+                    <div class="header-cell total">Depth</div>
                 </div>
-                <div id="asks-container"></div>
-                <div class="spread-divider" id="spread-info">--</div>
-                <div id="bids-container"></div>
+                <div id="ladder-visual" class="ladder" style="padding: 0;">
+                    <div id="asks-container"></div>
+                    <div class="spread-divider" id="spread-info" style="background: #0d1117; font-weight: bold; color: #f0f6fc; height: 30px;">--</div>
+                    <div id="bids-container"></div>
+                </div>
             </div>
         </div>
 
-        <!-- Right Column: Charts -->
-        <div class="viz-column">
-            <div class="chart-container">
-                <div class="chart-title">
-                    Price Divergence
-                    <span style="font-weight: normal; color: #8b949e;">Blue: Mid | Yellow: Micro</span>
-                </div>
-                <div id="price-chart"></div>
+        <!-- BOTTOM ROW: Heatmap -->
+        <div class="heatmap-row">
+            <div class="chart-title" style="margin-bottom: 5px;">
+                Market Depth Heatmap
+                <span style="font-weight: normal; font-size: 10px; color: #8b949e;">Rolling 20s Window</span>
             </div>
-            
-            <div class="heatmap-container">
-                <div class="chart-title">Limit Order Heatmap (Depth History)</div>
-                <canvas id="heatmap-canvas"></canvas>
-                
-                <div class="heatmap-legend">
-                    <div class="legend-item"><div class="color-box ask"></div> Ask (Resistance)</div>
-                    <div class="legend-item">← Past (20s) | Present →</div>
-                    <div class="legend-item"><div class="color-box bid"></div> Bid (Support)</div>
-                </div>
-                
-                <div class="heatmap-explainer">
-                    <strong>How to read:</strong> The Heatmap shows the evolution of the Order Book over time.
-                    <br>• <strong>X-Axis:</strong> Time. Newest data enters from the right.
-                    <br>• <strong>Y-Axis:</strong> Price. Centered on the current Mid Price.
-                    <br>• <strong>Brightness:</strong> Intensity represents volume size. Brighter = stronger wall.
-                </div>
+            <div style="flex-grow: 1; position: relative; min-height: 0;">
+                <canvas id="heatmap-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></canvas>
+            </div>
+            <div class="heatmap-legend" style="margin-top: 5px; padding: 4px; background: transparent;">
+                <div class="legend-item"><div class="color-box ask"></div> Ask Wall</div>
+                <div class="legend-item" style="font-size: 10px; color: #484f58;">TIME →</div>
+                <div class="legend-item"><div class="color-box bid"></div> Bid Wall</div>
             </div>
         </div>
     </div>
-
-    <script src="/static/app.js?v=4"></script>
+    
+    <script src="/static/app.js?v=5"></script>
 </body>
 </html>

@@ -25,7 +25,7 @@ const els = {
     status: document.getElementById('status-indicator'),
     statusText: document.getElementById('status-text'),
     heatmapCanvas: document.getElementById('heatmap-canvas'),
-    errorBanner: document.getElementById('error-banner'),
+    // ... other elements ...
     insightsText: document.getElementById('insights-text'),
     // Paper Trading Elements
     ptUsd: document.getElementById('pt-usd'),
@@ -240,8 +240,20 @@ function updateUI(data) {
     els.ofi.textContent = m.ofi.toFixed(4);
     els.cvd.textContent = m.cvd.toFixed(4);
     
-    // Colors
+    // Colors and Flash Effects
     els.ofi.style.color = m.ofi > 0 ? '#7ee787' : (m.ofi < 0 ? '#ff7b72' : '#f0f6fc');
+    
+    // Flash Animation for OFI
+    if (m.ofi > 5) {
+        els.ofi.classList.remove('flash-up', 'flash-down');
+        void els.ofi.offsetWidth; // Trigger reflow
+        els.ofi.classList.add('flash-up');
+    } else if (m.ofi < -5) {
+        els.ofi.classList.remove('flash-up', 'flash-down');
+        void els.ofi.offsetWidth; // Trigger reflow
+        els.ofi.classList.add('flash-down');
+    }
+
     els.cvd.style.color = m.cvd > 0 ? '#7ee787' : (m.cvd < 0 ? '#ff7b72' : '#f0f6fc');
     els.imb.style.color = m.imb > 0 ? '#7ee787' : (m.imb < 0 ? '#ff7b72' : '#f0f6fc');
 
@@ -445,80 +457,82 @@ function updateHeatmap(data, maxVol) {
     if (heatmapData.length === 0) return;
 
     // Determine Price Range for Y-axis based on current visible ladder
-    // Use the lowest bid and highest ask from the current depth to frame the heatmap
     const currentMid = data.metrics.mid;
     if (!currentMid) return;
 
-    // Find min/max from current ladder snapshot
-    let minP = currentMid;
-    let maxP = currentMid;
-    
-    if (data.bids.length > 0) {
-        // bids are sorted descending, so last element is lowest price
-        minP = data.bids[data.bids.length - 1][0];
-    }
-    if (data.asks.length > 0) {
-        // asks are sorted ascending, so last element is highest price
-        maxP = data.asks[data.asks.length - 1][0];
-    }
+    // Use a fixed range around mid price for stability, or dynamic based on history
+    // Dynamic: Find global min/max in current buffer to avoid "jumping"
+    let globalMin = Infinity;
+    let globalMax = -Infinity;
 
-    // Add a small buffer (5%)
-    const buffer = (maxP - minP) * 0.05;
-    const minPrice = minP - buffer;
-    const maxPrice = maxP + buffer;
+    // Optimization: Just check the last few snapshots to keep it responsive but less jumpy
+    // Or just use the current snapshot's range with a wider buffer
+    // Let's use current snapshot + 0.5% buffer for a "zoom" effect
+    const spread = data.metrics.spread || 10;
+    const viewRange = spread * 20; // View 20 spreads up and down
+    
+    const minPrice = currentMid - viewRange;
+    const maxPrice = currentMid + viewRange;
     const priceRange = maxPrice - minPrice;
     
-    if (priceRange <= 0) return; // Safety check
-
     const colWidth = w / MAX_HEATMAP_TICKS;
+
+    // Draw Background Grid
+    ctx.strokeStyle = '#21262d';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    // Horizontal lines for price levels could go here
+    ctx.stroke();
 
     heatmapData.forEach((snapshot, index) => {
         const x = w - ((heatmapData.length - index) * colWidth);
         
-        // Draw Asks
+        // Draw Asks (Red)
         snapshot.asks.forEach(([price, qty]) => {
             if (price < minPrice || price > maxPrice) return;
             const y = h - ((price - minPrice) / priceRange) * h;
-            const alpha = Math.min(qty / maxVol, 1);
-            ctx.fillStyle = `rgba(255, 123, 114, ${alpha})`; // Red
-            ctx.fillRect(x, y, colWidth, 2);
+            // Intensity based on relative volume
+            const alpha = Math.min((qty / maxVol) * 1.5, 1); // Boost visibility
+            ctx.fillStyle = `rgba(255, 123, 114, ${alpha})`; 
+            ctx.fillRect(x, y - 1, colWidth + 0.5, 2); // Slight overlap to avoid gaps
         });
 
-        // Draw Bids
+        // Draw Bids (Green)
         snapshot.bids.forEach(([price, qty]) => {
             if (price < minPrice || price > maxPrice) return;
             const y = h - ((price - minPrice) / priceRange) * h;
-            const alpha = Math.min(qty / maxVol, 1);
-            ctx.fillStyle = `rgba(126, 231, 135, ${alpha})`; // Green
-            ctx.fillRect(x, y, colWidth, 2);
+            const alpha = Math.min((qty / maxVol) * 1.5, 1);
+            ctx.fillStyle = `rgba(126, 231, 135, ${alpha})`; 
+            ctx.fillRect(x, y - 1, colWidth + 0.5, 2);
         });
     });
 
+    // Draw Mid Price Line
+    const midY = h - ((currentMid - minPrice) / priceRange) * h;
+    ctx.strokeStyle = '#58a6ff';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(0, midY);
+    ctx.lineTo(w, midY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
     // Draw Axes Labels
     ctx.fillStyle = "#8b949e";
-    ctx.font = "10px monospace";
+    ctx.font = "11px 'SF Mono', monospace";
     
-    // Y-Axis (Price) - Right aligned
+    // Y-Axis (Price)
     ctx.textAlign = "right";
     ctx.textBaseline = "top";
-    ctx.fillText(maxPrice.toFixed(2), w - 5, 5); // Top
-    
-    ctx.textBaseline = "middle";
-    ctx.fillText(currentMid.toFixed(2), w - 5, h / 2); // Mid
+    ctx.fillText(maxPrice.toFixed(2), w - 5, 5); 
     
     ctx.textBaseline = "bottom";
-    ctx.fillText(minPrice.toFixed(2), w - 5, h - 5); // Bottom
+    ctx.fillText(minPrice.toFixed(2), w - 5, h - 5); 
 
-    // X-Axis (Time) - Left aligned
+    // X-Axis (Time)
     ctx.textAlign = "left";
-    ctx.textBaseline = "bottom";
     ctx.fillText("-20s", 5, h - 5);
-    
-    ctx.textAlign = "center";
-    ctx.fillText("-10s", w / 2, h - 5);
-    
-    ctx.textAlign = "right";
-    ctx.fillText("Now", w - 35, h - 5); // Offset from price label
 }
 
 // Initialize on Load
