@@ -241,52 +241,51 @@ function updateInsights(data) {
     let sentiment = "Neutral";
     let color = "#8b949e";
     let action = "Wait";
-    let details = [];
+    let reasons = [];
 
     // Analyze OFI (Order Flow Imbalance)
     if (m.ofi > 5) {
-        details.push("OFI: Strong Buying Pressure");
+        reasons.push("OFI Buy");
         sentiment = "Bullish";
     } else if (m.ofi < -5) {
-        details.push("OFI: Strong Selling Pressure");
+        reasons.push("OFI Sell");
         sentiment = "Bearish";
     }
 
     // Analyze Imbalance
     if (m.imb > 0.3) {
-        details.push("Book: Heavy Bids (Support)");
-        if (sentiment === "Bullish") action = "Bet on Price Rise (Long Scalp)";
+        reasons.push("Bid Support");
+        if (sentiment === "Bullish") action = "Buy";
     } else if (m.imb < -0.3) {
-        details.push("Book: Heavy Asks (Resistance)");
-        if (sentiment === "Bearish") action = "Bet on Price Drop (Short Scalp)";
+        reasons.push("Ask Resist");
+        if (sentiment === "Bearish") action = "Sell";
     }
 
     // Analyze Microprice vs Mid
     const skew = m.micro - m.mid;
     if (Math.abs(skew) > 0.5) {
-        details.push(`Skew: $${skew.toFixed(2)} (${skew > 0 ? 'Up' : 'Down'})`);
+        reasons.push(`Skew ${skew > 0 ? '+' : '-'}${Math.abs(skew).toFixed(2)}`);
     }
 
     // Final Decision Logic
     if (sentiment === "Bullish") {
         color = "#7ee787"; // Green
-        if (action === "Wait") action = "Look for Longs";
+        if (action === "Wait") action = "Watch Buy";
     } else if (sentiment === "Bearish") {
         color = "#ff7b72"; // Red
-        if (action === "Wait") action = "Look for Shorts";
+        if (action === "Wait") action = "Watch Sell";
     }
 
-    // Display
+    // Display - Compact Single Row
     els.insightsText.innerHTML = `
-        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-            <span style="font-weight:bold; color:${color}; font-size:14px;">${sentiment}</span>
-            <span style="color:#c9d1d9;">Action: <strong>${action}</strong></span>
-        </div>
-        <div style="color:#8b949e; font-size:11px;">
-            ${details.length > 0 ? '• ' + details.join('<br>• ') : '• Market is balanced'}
-        </div>
-        <div style="margin-top: 5px; font-size: 10px; color: #586069; border-top: 1px dashed #30363d; padding-top: 4px;">
-            <em>*Short Scalp: A strategy to profit from a quick price drop by selling high and buying back lower.</em>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-weight:bold; color:${color}; font-size:14px;">${action.toUpperCase()}</span>
+                <span style="color:#8b949e; font-size:11px; border-left: 1px solid #30363d; padding-left: 10px;">
+                    ${reasons.length > 0 ? reasons.join(' • ') : 'Balanced'}
+                </span>
+            </div>
+            <div style="font-size:11px; color:#58a6ff;">${sentiment}</div>
         </div>
     `;
 }
