@@ -27,7 +27,7 @@ class Broadcaster:
                 # In a real app, we might want to clean up here too
                 pass
 
-    async def start_broadcasting(self, order_book: OrderBook):
+    async def start_broadcasting(self, order_book: OrderBook, paper_engine=None):
         """
         Background task to broadcast ladder payload every 100ms.
         """
@@ -38,6 +38,11 @@ class Broadcaster:
                     continue
                 
                 payload = order_book.ladder_payload(depth=10)
+                
+                if paper_engine:
+                    current_price = payload.get("metrics", {}).get("mid", 0.0)
+                    payload["portfolio"] = paper_engine.get_portfolio_snapshot(current_price)
+                
                 await self.broadcast(payload)
                 
             except Exception as e:

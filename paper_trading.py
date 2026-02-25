@@ -56,6 +56,23 @@ class PaperTradingEngine:
         # Metrics
         self.realized_pnl = 0.0
         self.total_volume_traded = 0.0
+        
+        # Settings
+        self.fees_enabled = True
+
+    def reset(self):
+        """Resets the account state to initial values."""
+        self.balance_usd = 100000.0
+        self.balance_btc = 0.0
+        self.orders.clear()
+        self.open_orders.clear()
+        self.realized_pnl = 0.0
+        self.total_volume_traded = 0.0
+        print("[PaperTrade] Account Reset")
+
+    def set_fees(self, enabled: bool):
+        self.fees_enabled = enabled
+        print(f"[PaperTrade] Fees {'Enabled' if enabled else 'Disabled'}")
 
     def _get_latency_delay(self) -> float:
         return random.uniform(self.min_latency, self.max_latency) / 1000.0
@@ -118,15 +135,22 @@ class PaperTradingEngine:
         liquidity = []
         if order.side == OrderSide.BUY:
             # Buying takes from Asks (lowest first)
-            liquidity = list(order_book.asks.items()) # already sorted low->high
+            # Asks are sorted ascending (Low -> High)
+            liquidity = list(order_book.asks.items())
         else:
             # Selling takes from Bids (highest first)
-            liquidity = list(order_book.bids.items()) # sorted low->high? SortedDict sorts by key.
-            liquidity = list(reversed(liquidity)) # Bids need high->low
+            # Bids are stored with negative keys (-Price).
+            # SortedDict sorts -100 < -99, so (-100, qty) comes first.
+            # This corresponds to Price 100 (Highest Bid).
+            # So we do NOT need to reverse.
+            liquidity = list(order_book.bids.items())
 
-        for price, vol in liquidity:
+        for raw_price, vol in liquidity:
             if remaining_qty <= 0:
                 break
+            
+            # If side is SELL, raw_price is negative (from Bids key)
+            price = abs(raw_price)
                 
             fill_qty = min(remaining_qty, vol)
             total_cost += fill_qty * price
@@ -197,7 +221,11 @@ class PaperTradingEngine:
     def _finalize_fill(self, order: Order, qty: float, price: float, is_maker: bool):
         fee_rate = self.maker_fee if is_maker else self.taker_fee
         cost = qty * price
-        fee = cost * fee_rate
+        
+        # Calculate fee
+        fee = 0.0
+        if self.fees_enabled:
+            fee = cost * fee_rate
         
         if order.side == OrderSide.BUY:
             self.balance_usd -= cost
@@ -224,11 +252,18 @@ class PaperTradingEngine:
         print(f"--- PORTFOLIO ---")
         print(f"USD: {self.balance_usd:.2f}")
         print(f"BTC: {self.balance_btc:.4f}")
+        print(f"Fees: {'On' if self.fees_enabled else 'Off'}")
         print(f"-----------------")
 
-    def get_portfolio_snapshot(self) -> Dict:
+    def get_portfolio_snapshot(self, current_price: float = 0.0) -> Dict:
+        equity = self.balance_usd
+        if current_price > 0:
+            equity += self.balance_btc * current_price
+            
         return {
             "usd": self.balance_usd,
             "btc": self.balance_btc,
+            "equity": equity,
+            "fees_enabled": self.fees_enabled,
             "open_orders": len(self.open_orders)
         }

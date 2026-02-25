@@ -4,6 +4,12 @@ let ws;
 let pollingInterval;
 let isPolling = false;
 
+// Auto-Trading State
+let autoTradeEnabled = false;
+let lastTradeTime = 0;
+const TRADE_COOLDOWN = 1000; // 1 second cooldown for HFT
+const MAX_POSITION = 0.05;   // Max inventory constraint
+
 // Elements
 const els = {
     spread: document.getElementById('spread'),
@@ -20,11 +26,48 @@ const els = {
     statusText: document.getElementById('status-text'),
     heatmapCanvas: document.getElementById('heatmap-canvas'),
     errorBanner: document.getElementById('error-banner'),
-    insightsText: document.getElementById('insights-text')
+    insightsText: document.getElementById('insights-text'),
+    // Paper Trading Elements
+    ptUsd: document.getElementById('pt-usd'),
+    ptBtc: document.getElementById('pt-btc'),
+    ptEquity: document.getElementById('pt-equity')
 };
 
 const askRows = [];
 const bidRows = [];
+
+// --- Paper Trading Logic ---
+async function placeOrder(side) {
+    try {
+        const res = await fetch('/api/order', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                side: side,
+                quantity: 0.01, // Small size for auto-trading
+                order_type: 'MARKET'
+            })
+        });
+        const data = await res.json();
+        if (data.error) showError(data.error);
+        else console.log("Order Placed:", data.order_id);
+    } catch (e) {
+        showError("Order Failed: " + e.message);
+    }
+}
+
+async function resetAccount() {
+    if(!confirm("Reset Paper Trading Account?")) return;
+    try {
+        await fetch('/api/reset', {method: 'POST'});
+    } catch (e) {
+        showError("Reset Failed: " + e.message);
+    }
+}
+
+// Expose functions to window for HTML onclick
+window.placeOrder = placeOrder;
+window.resetAccount = resetAccount;
 
 // --- Error Handling ---
 function showError(msg) {
@@ -98,6 +141,35 @@ function init() {
     
     // Short delay to allow script to load if it was deferred or fallback
     setTimeout(initChart, 500);
+    
+    // Auto-Trade Toggle Listener
+    const toggle = document.getElementById('auto-trade-toggle');
+    if (toggle) {
+        toggle.addEventListener('change', (e) => {
+            autoTradeEnabled = e.target.checked;
+            console.log("Auto-Trading:", autoTradeEnabled ? "ON" : "OFF");
+        });
+    }
+
+    // Fee Toggle Listener
+    const feesToggle = document.getElementById('fees-toggle');
+    if (feesToggle) {
+        feesToggle.addEventListener('change', async (e) => {
+            const enabled = e.target.checked;
+            try {
+                await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({fees_enabled: enabled})
+                });
+                console.log("Fees:", enabled ? "Enabled" : "Disabled");
+            } catch (err) {
+                console.error("Failed to update settings", err);
+                e.target.checked = !enabled; // Revert on error
+            }
+        });
+    }
+
     connect();
 }
 
@@ -232,6 +304,20 @@ function updateUI(data) {
     } catch (e) {
         console.error("Insights Error", e);
     }
+
+    // Update Paper Portfolio
+    if (data.portfolio) {
+        els.ptUsd.textContent = data.portfolio.usd.toLocaleString('en-US', {style: 'currency', currency: 'USD'});
+        els.ptBtc.textContent = data.portfolio.btc.toFixed(4) + " BTC";
+        
+        // Calculate PnL Color
+        const startEquity = 100000;
+        const currentEquity = data.portfolio.equity;
+        const pnl = currentEquity - startEquity;
+        const pnlColor = pnl >= 0 ? '#7ee787' : '#da3633';
+        
+        els.ptEquity.innerHTML = `${currentEquity.toLocaleString('en-US', {style: 'currency', currency: 'USD'})} <span style="font-size:10px; color:${pnlColor}">(${pnl > 0 ? '+' : ''}${pnl.toFixed(2)})</span>`;
+    }
 }
 
 function updateInsights(data) {
@@ -288,6 +374,60 @@ function updateInsights(data) {
             <div style="font-size:11px; color:#58a6ff;">${sentiment}</div>
         </div>
     `;
+
+    // --- Auto-Trading Logic (HFT Style) ---
+    const now = Date.now();
+    if (autoTradeEnabled && (now - lastTradeTime > TRADE_COOLDOWN)) {
+        
+        // 1. Get current position
+        let currentPos = 0.0;
+        if (data.portfolio) {
+            currentPos = data.portfolio.btc;
+        }
+
+        // 2. Define Signal Strength
+        // OFI gives directional pressure (-10 to +10 typically)
+        // Skew gives microprice deviation (-1 to +1 typically)
+        const skew = m.micro - m.mid;
+        
+        // HFT Logic: Chase the Microprice Skew heavily
+        let signal = 0;
+        if (Math.abs(skew) > 0.1) signal += skew * 5; // Strong weight on microprice
+        if (Math.abs(m.ofi) > 3) signal += m.ofi * 0.1; // Moderate weight on OFI
+
+        const THRESHOLD = 0.5;
+
+        // 3. Execution Logic with Inventory Controls
+        if (signal > THRESHOLD) {
+            // Bullish Signal
+            if (currentPos < MAX_POSITION) {
+                placeOrder('buy');
+                lastTradeTime = now;
+                console.log(`HFT: BUY (Signal: ${signal.toFixed(2)}, Pos: ${currentPos.toFixed(3)})`);
+            }
+        } else if (signal < -THRESHOLD) {
+            // Bearish Signal
+            if (currentPos > -MAX_POSITION) {
+                placeOrder('sell');
+                lastTradeTime = now;
+                console.log(`HFT: SELL (Signal: ${signal.toFixed(2)}, Pos: ${currentPos.toFixed(3)})`);
+            }
+        } else {
+            // Neutral Signal - Inventory Management / Mean Reversion
+            // If we are holding a position and signal is weak, close it to free up capital
+            if (Math.abs(currentPos) > 0.001) {
+                if (currentPos > 0) {
+                    placeOrder('sell'); // Close Long
+                    lastTradeTime = now;
+                    console.log("HFT: Closing Long (Signal Weak)");
+                } else {
+                    placeOrder('buy'); // Close Short
+                    lastTradeTime = now;
+                    console.log("HFT: Closing Short (Signal Weak)");
+                }
+            }
+        }
+    }
 }
 
 function updateHeatmap(data, maxVol) {
