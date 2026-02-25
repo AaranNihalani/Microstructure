@@ -16,7 +16,7 @@ body {
 .dashboard-grid {
     display: grid;
     grid-template-columns: 1fr 320px; /* Left: Main Content (Flex), Right: Sidebar (Fixed) */
-    grid-template-rows: 65% 1fr; /* Top: Charts/Metrics, Bottom: Heatmap */
+    grid-template-rows: 1fr 220px; /* Top: Charts/Metrics (Flex), Bottom: Heatmap (Fixed Height) */
     gap: 10px;
     width: 100%;
     height: 100%;
@@ -30,7 +30,9 @@ body {
     flex-direction: column;
     gap: 10px;
     height: 100%;
-    grid-row: 1 / 2; /* Top row only */
+    grid-row: 1 / 2;
+    grid-column: 1 / 2;
+    min-height: 0; /* Enable flex shrinking */
 }
 
 /* Chart Panel */
@@ -65,8 +67,8 @@ body {
     flex-direction: column;
     gap: 10px;
     height: 100%;
-    grid-row: 1 / 3; /* Spans full height! No, wait. Heatmap is bottom. */
-    grid-row: 1 / 2; /* Matches main column height */
+    grid-row: 1 / 3; /* Spans full height */
+    grid-column: 2 / 3;
 }
 
 /* Trading Panel */
@@ -94,7 +96,7 @@ body {
 
 /* Bottom Row: Heatmap */
 .heatmap-row {
-    grid-column: 1 / 3; /* Span full width */
+    grid-column: 1 / 2; /* Left column only */
     grid-row: 2 / 3; /* Bottom row */
     background: #0d1117;
     border: 1px solid #30363d;

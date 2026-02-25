@@ -37,7 +37,7 @@ class Broadcaster:
                 if not self.active_connections:
                     continue
                 
-                payload = order_book.ladder_payload(depth=10)
+                payload = order_book.ladder_payload(depth=13)
                 
                 if paper_engine:
                     current_price = payload.get("metrics", {}).get("mid", 0.0)

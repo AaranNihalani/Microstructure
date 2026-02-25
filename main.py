@@ -105,7 +105,7 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.get("/api/snapshot")
 async def get_snapshot():
     """Returns the current ladder payload as JSON (Polling fallback)."""
-    payload = order_book.ladder_payload(depth=10)
+    payload = order_book.ladder_payload(depth=13)
     current_price = payload.get("metrics", {}).get("mid", 0.0)
     payload["portfolio"] = paper_engine.get_portfolio_snapshot(current_price)
     return JSONResponse(payload)

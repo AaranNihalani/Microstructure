@@ -1,4 +1,4 @@
-const DEPTH = 10;
+const DEPTH = 13;
 const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + "/ws";
 let ws;
 let pollingInterval;
@@ -7,8 +7,9 @@ let isPolling = false;
 // Auto-Trading State
 let autoTradeEnabled = false;
 let lastTradeTime = 0;
-const TRADE_COOLDOWN = 1000; // 1 second cooldown for HFT
-const MAX_POSITION = 0.05;   // Max inventory constraint
+const TRADE_COOLDOWN = 500; // 500ms cooldown for HFT
+const MAX_POSITION = 0.5;   // Increased Max inventory constraint
+let tradeMarkers = []; // Store chart markers for trades
 
 // Elements
 const els = {
@@ -50,7 +51,26 @@ async function placeOrder(side) {
         });
         const data = await res.json();
         if (data.error) showError(data.error);
-        else console.log("Order Placed:", data.order_id);
+        else {
+            console.log("Order Placed:", data.order_id);
+            // Add Trade Marker
+            if (midSeries) {
+                const now = Math.floor(Date.now() / 1000);
+                tradeMarkers.push({
+                    time: now,
+                    position: side === 'buy' ? 'belowBar' : 'aboveBar',
+                    color: side === 'buy' ? '#2ea043' : '#da3633',
+                    shape: 'circle',
+                    size: 0.5,
+                    text: ''
+                });
+                // Ensure sorted by time
+                tradeMarkers.sort((a, b) => a.time - b.time);
+                try {
+                    midSeries.setMarkers(tradeMarkers);
+                } catch(e) { console.error("Marker Error:", e); }
+            }
+        }
     } catch (e) {
         showError("Order Failed: " + e.message);
     }
@@ -443,6 +463,9 @@ function updateInsights(data) {
 }
 
 function updateHeatmap(data, maxVol) {
+    // Validate Data
+    if (!data.metrics || !data.metrics.mid) return;
+
     // Shift buffer
     heatmapData.push(data);
     if (heatmapData.length > MAX_HEATMAP_TICKS) heatmapData.shift();
@@ -458,7 +481,7 @@ function updateHeatmap(data, maxVol) {
 
     // Determine Price Range for Y-axis based on current visible ladder
     const currentMid = data.metrics.mid;
-    if (!currentMid) return;
+    // if (!currentMid) return; // Already checked above
 
     // Use a fixed range around mid price for stability, or dynamic based on history
     // Dynamic: Find global min/max in current buffer to avoid "jumping"
