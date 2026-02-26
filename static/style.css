@@ -638,6 +638,70 @@ body {
     border-top: 1px solid #30363d;
 }
 
+/* Backtest Results Grid */
+.backtest-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.backtest-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.backtest-card .label {
+    font-size: 10px;
+    color: #8b949e;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+}
+
+.backtest-card .value {
+    font-size: 16px;
+    font-weight: bold;
+    color: #f0f6fc;
+}
+
+.backtest-card .sub-value {
+    font-size: 10px;
+    color: #8b949e;
+    margin-top: 2px;
+}
+
+.backtest-card.profit .value { color: #7ee787; }
+.backtest-card.loss .value { color: #ff7b72; }
+
+/* Custom Tooltip */
+.custom-tooltip {
+    position: absolute;
+    background: #161b22;
+    color: #f0f6fc;
+    border: 1px solid #30363d;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    z-index: 10000;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s ease;
+    max-width: 250px;
+    line-height: 1.4;
+}
+
+.custom-tooltip.visible {
+    opacity: 1;
+}
+
 /* Error Banner */
 #error-banner {
     position: fixed;

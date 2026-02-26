@@ -85,30 +85,33 @@ class BacktesterV2:
             "data_points": len(self.df)
         }
 
-    def run_fast_backtest(self):
+    def run_fast_backtest(self, include_fees=True):
         """
         Vectorized backtest for speed.
         """
         if self.df.empty: return {}
         
         # Calculate Indicators
-        self.df['ma_50'] = self.df['close'].rolling(50).mean()
-        self.df['std_50'] = self.df['close'].rolling(50).std()
+        # Switch to 300-second (5 min) window to reduce noise
+        window = 300
+        self.df['ma_50'] = self.df['close'].rolling(window).mean()
+        self.df['std_50'] = self.df['close'].rolling(window).std()
         
-        # Signal: Buy if Close < MA - 2*Std (Bollinger Lower)
-        # Sell if Close > MA + 2*Std (Bollinger Upper)
+        # Signal: Buy if Close < MA - 2.5*Std (Bollinger Lower)
+        # Sell if Close > MA + 2.5*Std (Bollinger Upper)
+        std_mult = 2.5
         
         self.df['signal'] = 0
-        self.df.loc[self.df['close'] < self.df['ma_50'] - 2*self.df['std_50'], 'signal'] = 1 # Buy
-        self.df.loc[self.df['close'] > self.df['ma_50'] + 2*self.df['std_50'], 'signal'] = -1 # Sell
+        self.df.loc[self.df['close'] < self.df['ma_50'] - std_mult*self.df['std_50'], 'signal'] = 1 # Buy
+        self.df.loc[self.df['close'] > self.df['ma_50'] + std_mult*self.df['std_50'], 'signal'] = -1 # Sell
         
         # Calculate Returns
         self.df['pct_change'] = self.df['close'].pct_change()
         self.df['strategy_return'] = self.df['signal'].shift(1) * self.df['pct_change']
         
         # Transaction Costs (Fees)
-        # Assuming Taker Fee of 0.04% (0.0004)
-        taker_fee = 0.0004
+        # Assuming Taker Fee of 0.04% (0.0004) if enabled
+        taker_fee = 0.0004 if include_fees else 0.0
         # Calculate turnover: change in position
         self.df['position_change'] = self.df['signal'].diff().abs()
         # Cost is turnover * fee
@@ -127,16 +130,29 @@ class BacktesterV2:
         drawdown = (self.df['cum_return'] - rolling_max) / rolling_max
         max_drawdown = drawdown.min() * 100 # In percentage
         
-        # Sharpe Ratio (Assuming 1m data, annualized)
+        # Metrics Calculation
+        trades_count = int(self.df['position_change'].sum() / 2)
+        total_fees = self.df['costs'].sum()
+        
+        # Win Rate
+        winning_trades = self.df[self.df['net_return'] > 0]['net_return'].count()
+        losing_trades = self.df[self.df['net_return'] < 0]['net_return'].count()
+        total_periods = winning_trades + losing_trades
+        win_rate = (winning_trades / total_periods * 100) if total_periods > 0 else 0
+        
+        # Sharpe Ratio (Assuming 1s data, annualized)
+        # 1 year = 365 * 24 * 60 * 60 = 31,536,000 seconds
         sharpe = 0
         if self.df['net_return'].std() > 0:
-            sharpe = (self.df['net_return'].mean() / self.df['net_return'].std()) * np.sqrt(525600) # minutes in year
+            sharpe = (self.df['net_return'].mean() / self.df['net_return'].std()) * np.sqrt(31536000)
             
         return {
             "total_return_pct": total_return * 100,
             "max_drawdown": max_drawdown,
             "sharpe_ratio": sharpe,
-            "trades": int(self.df['position_change'].sum() / 2) # Divide by 2 for round trips approx
+            "trades": trades_count,
+            "win_rate": win_rate,
+            "total_fees_pct": total_fees * 100
         }
 
 

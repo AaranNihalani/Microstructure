@@ -161,34 +161,53 @@ async def update_settings(
     return JSONResponse({"status": "updated", "fees_enabled": fees_enabled})
 
 @app.post("/api/backtest")
-async def run_backtest():
+async def run_backtest(fees: bool = True):
     """
     Triggers a backtest simulation on historical data.
+    Runs in a separate thread to prevent blocking the event loop.
     """
     global backtest_running
     if backtest_running:
         return JSONResponse({"status": "running", "message": "Backtest already in progress"})
         
+    def _run_backtest_task(fees_enabled):
+        try:
+            # Use 1s resolution for 24h as requested
+            data_path = "backtest_data/BTCUSDT_1s_1d.csv"
+            
+            # Always download fresh or check existing
+            if not os.path.exists(data_path):
+                 import download_data
+                 # Download 1 day of 1s klines
+                 download_data.download_klines("BTCUSDT", "1s", days=1)
+            
+            bt = BacktesterV2(data_path)
+            bt.load_data()
+            
+            # Run Fast Backtest
+            results = bt.run_fast_backtest(include_fees=fees_enabled)
+            
+            # Cleanup data as requested
+            if os.path.exists(data_path):
+                os.remove(data_path)
+                print(f"Deleted temporary backtest data: {data_path}")
+                
+            return results
+        except Exception as e:
+            print(f"Backtest error: {e}")
+            raise e
+
     try:
         backtest_running = True
-        # Check if data exists, if not, download sample
-        data_path = "backtest_data/BTCUSDT_trades_snapshot.csv"
-        if not os.path.exists(data_path):
-             # Trigger download (synchronously for now as it's a demo)
-             import download_data
-             download_data.download_trades_snapshot("BTCUSDT")
-        
-        bt = BacktesterV2(data_path)
-        bt.load_data()
-        
-        # Run Fast Backtest
-        results = bt.run_fast_backtest()
+        # Run in thread pool
+        results = await asyncio.to_thread(_run_backtest_task, fees)
         
         backtest_running = False
         return JSONResponse({"status": "completed", "results": results})
         
     except Exception as e:
         backtest_running = False
+        print(f"Backtest error: {e}")
         return JSONResponse({"status": "error", "message": str(e)})
 
 @app.get("/")

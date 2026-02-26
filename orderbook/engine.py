@@ -23,6 +23,7 @@ class OrderBook:
         
         # Metrics History
         self.ofi_window = deque(maxlen=50) # Rolling window for OFI sum
+        self.mid_prices = deque(maxlen=50) # Rolling window for Volatility
         self.cvd = 0.0 # Cumulative Volume Delta
 
     def load_snapshot(self, symbol="BTCUSDT", limit=1000):
@@ -202,6 +203,26 @@ class OrderBook:
         mid = calculate_midprice(best_bid, best_ask)
         micro = calculate_microprice(best_bid, best_ask, best_bid_qty, best_ask_qty)
         
+        # Volatility Calculation
+        if mid:
+            self.mid_prices.append(mid)
+        
+        volatility = 0.0
+        if len(self.mid_prices) > 1:
+            mean_mid = sum(self.mid_prices) / len(self.mid_prices)
+            variance = sum((x - mean_mid) ** 2 for x in self.mid_prices) / len(self.mid_prices)
+            std_dev = variance ** 0.5
+            # Convert to Basis Points (BPS)
+            if mean_mid > 0:
+                volatility = (std_dev / mean_mid) * 10000 
+            else:
+                volatility = 0.0
+
+        # Intensity Calculation (Depth Volume)
+        bid_vol = sum(level[1] for level in bids_data[:5])
+        ask_vol = sum(level[1] for level in asks_data[:5])
+        intensity = bid_vol + ask_vol
+
         # Sum OFI window
         ofi_val = sum(self.ofi_window) if self.ofi_window else 0.0
         
@@ -215,6 +236,8 @@ class OrderBook:
                 "mid": mid,
                 "micro": micro,
                 "ofi": ofi_val,
-                "cvd": self.cvd
+                "cvd": self.cvd,
+                "intensity": intensity,
+                "volatility": volatility
             }
         }

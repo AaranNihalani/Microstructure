@@ -44,20 +44,55 @@ const els = {
 // --- Backtesting Logic ---
 if (els.backtestBtn) {
     els.backtestBtn.addEventListener('click', async () => {
+        const feesCheckbox = document.getElementById('backtest-fees-toggle');
+        const includeFees = feesCheckbox ? feesCheckbox.checked : true;
+        
         els.backtestResults.style.display = 'block';
         els.backtestResults.innerHTML = '<span style="color:#e3b341">Running simulation... this may take a moment.</span>';
         
         try {
-            const res = await fetch('/api/backtest', {method: 'POST'});
+            const res = await fetch(`/api/backtest?fees=${includeFees}`, {method: 'POST'});
             const data = await res.json();
             
             if (data.status === 'completed') {
                 const r = data.results;
                 els.backtestResults.innerHTML = `
-                    <div style="color:#7ee787; font-weight:bold; margin-bottom:5px;">Simulation Complete</div>
-                    <div>Return: <span style="color:${r.total_return_pct >= 0 ? '#7ee787' : '#da3633'}">${r.total_return_pct.toFixed(2)}%</span></div>
-                    <div>Sharpe: ${r.sharpe_ratio.toFixed(2)}</div>
-                    <div>Max DD: ${r.max_drawdown.toFixed(2)}%</div>
+                    <div style="color:#f0f6fc; font-weight:bold; margin-bottom:10px; border-bottom:1px solid #30363d; padding-bottom:5px;">
+                        Simulation Results ${includeFees ? '<span style="font-size:10px; color:#8b949e; font-weight:normal">(Fees Included)</span>' : '<span style="font-size:10px; color:#8b949e; font-weight:normal">(No Fees)</span>'}
+                    </div>
+                    
+                    <div class="backtest-grid">
+                        <div class="backtest-card ${r.total_return_pct >= 0 ? 'profit' : 'loss'}">
+                            <div class="label">Total Return</div>
+                            <div class="value">${r.total_return_pct.toFixed(2)}%</div>
+                            <div class="sub-value">PnL</div>
+                        </div>
+                        <div class="backtest-card">
+                            <div class="label">Sharpe Ratio</div>
+                            <div class="value" style="color:${r.sharpe_ratio > 1 ? '#7ee787' : r.sharpe_ratio > 0 ? '#e3b341' : '#ff7b72'}">${r.sharpe_ratio.toFixed(2)}</div>
+                            <div class="sub-value">Risk Adj.</div>
+                        </div>
+                        <div class="backtest-card">
+                            <div class="label">Max Drawdown</div>
+                            <div class="value" style="color:#ff7b72">${r.max_drawdown.toFixed(2)}%</div>
+                            <div class="sub-value">Risk</div>
+                        </div>
+                        <div class="backtest-card">
+                            <div class="label">Trades</div>
+                            <div class="value" style="color:#f0f6fc">${r.trades}</div>
+                            <div class="sub-value">Count</div>
+                        </div>
+                        <div class="backtest-card">
+                            <div class="label">Win Rate</div>
+                            <div class="value" style="color:${r.win_rate > 50 ? '#7ee787' : '#8b949e'}">${r.win_rate ? r.win_rate.toFixed(1) : '0.0'}%</div>
+                            <div class="sub-value">Accuracy</div>
+                        </div>
+                        <div class="backtest-card">
+                            <div class="label">Fees Paid</div>
+                            <div class="value" style="color:#8b949e">${r.total_fees_pct ? r.total_fees_pct.toFixed(2) : '0.00'}%</div>
+                            <div class="sub-value">Cost</div>
+                        </div>
+                    </div>
                 `;
             } else if (data.status === 'running') {
                 els.backtestResults.innerHTML = '<span style="color:#e3b341">Backtest already running...</span>';
@@ -352,6 +387,10 @@ function updateUI(data) {
     els.ofi.textContent = m.ofi.toFixed(4);
     els.cvd.textContent = m.cvd.toFixed(4);
     
+    // Intensity & Volatility
+    if (m.intensity !== undefined) els.intensity.textContent = m.intensity.toFixed(2);
+    if (m.volatility !== undefined) els.volatility.textContent = m.volatility.toFixed(2);
+    
     // Colors and Flash Effects
     els.ofi.style.color = m.ofi > 0 ? '#7ee787' : (m.ofi < 0 ? '#ff7b72' : '#f0f6fc');
     
@@ -517,7 +556,7 @@ function updateInsights(data) {
 
         const THRESHOLD = 0.5;
 
-        // Fixed Size
+        // Fixed Size (Reverted)
         const size = 0.01;
 
         // 3. Execution Logic
@@ -541,7 +580,7 @@ function updateInsights(data) {
         } else {
             // Neutral -> Inventory Management
             if (Math.abs(currentPos) > 0.1) { // Only if exposure is significant
-                // Close position slowly using Market Orders
+                // Close position slowly using Market Orders (Reverted to 0.01 increments)
                 if (currentPos > 0) {
                     placeOrder('sell', 'MARKET', 0.01); 
                     console.log("HFT Taker: Unwinding Long");
@@ -555,13 +594,20 @@ function updateInsights(data) {
     }
 }
 
-function updateHeatmap(data, maxVol) {
+function updateHeatmap(data, currentSnapshotMaxVol) {
     // Validate Data
     if (!data.metrics || !data.metrics.mid) return;
 
     // Shift buffer
     heatmapData.push(data);
     if (heatmapData.length > MAX_HEATMAP_TICKS) heatmapData.shift();
+    
+    // Calculate global Max Vol for the entire visible history to normalize colors
+    let maxVol = 1;
+    heatmapData.forEach(d => {
+        if(d.asks) d.asks.forEach(level => maxVol = Math.max(maxVol, level[1]));
+        if(d.bids) d.bids.forEach(level => maxVol = Math.max(maxVol, level[1]));
+    });
     
     // Render
     const w = els.heatmapCanvas.width;
@@ -572,23 +618,35 @@ function updateHeatmap(data, maxVol) {
     
     if (heatmapData.length === 0) return;
 
-    // Determine Price Range for Y-axis based on current visible ladder
-    const currentMid = data.metrics.mid;
-    // if (!currentMid) return; // Already checked above
+    // Determine Price Range for Y-axis based on ALL visible history
+    let minPrice = Infinity;
+    let maxPrice = -Infinity;
 
-    // Use a fixed range around mid price for stability, or dynamic based on history
-    // Dynamic: Find global min/max in current buffer to avoid "jumping"
-    let globalMin = Infinity;
-    let globalMax = -Infinity;
+    // Scan the entire buffer to find the true min/max
+    heatmapData.forEach(d => {
+        // Check mid price
+        if (d.metrics && d.metrics.mid) {
+            minPrice = Math.min(minPrice, d.metrics.mid);
+            maxPrice = Math.max(maxPrice, d.metrics.mid);
+        }
+        // Optionally check best bid/ask for wider coverage
+        if (d.bids && d.bids.length > 0) minPrice = Math.min(minPrice, d.bids[0][0]);
+        if (d.asks && d.asks.length > 0) maxPrice = Math.max(maxPrice, d.asks[0][0]);
+    });
 
-    // Optimization: Just check the last few snapshots to keep it responsive but less jumpy
-    // Or just use the current snapshot's range with a wider buffer
-    // Let's use current snapshot + 0.5% buffer for a "zoom" effect
+    if (minPrice === Infinity || maxPrice === -Infinity) {
+         // Fallback to current if buffer empty
+         const currentMid = data.metrics.mid;
+         minPrice = currentMid * 0.999;
+         maxPrice = currentMid * 1.001;
+    }
+
+    // Add padding (e.g., 5 spreads or 0.05%) to keep candles away from edges
     const spread = data.metrics.spread || 10;
-    const viewRange = spread * 20; // View 20 spreads up and down
-    
-    const minPrice = currentMid - viewRange;
-    const maxPrice = currentMid + viewRange;
+    const padding = spread * 5; 
+    minPrice -= padding;
+    maxPrice += padding;
+
     const priceRange = maxPrice - minPrice;
     
     const colWidth = w / MAX_HEATMAP_TICKS;
