@@ -12,6 +12,9 @@ from orderbook.engine import OrderBook
 from orderbook.broadcaster import Broadcaster
 from paper_trading import PaperTradingEngine, OrderSide, OrderType
 
+from backtester_v2 import BacktesterV2
+import os
+
 # Configuration
 BINANCE_WS = "wss://stream.binance.com:9443/stream?streams=btcusdt@depth@100ms/btcusdt@trade"
 SYMBOL = "BTCUSDT"
@@ -20,6 +23,7 @@ SYMBOL = "BTCUSDT"
 order_book = OrderBook()
 broadcaster = Broadcaster()
 paper_engine = PaperTradingEngine()
+backtest_running = False
 
 async def binance_listener():
     """
@@ -138,6 +142,11 @@ async def place_order(
         
     return JSONResponse({"order_id": order_id, "status": "accepted"})
 
+@app.post("/api/cancel_all")
+async def cancel_all():
+    count = paper_engine.cancel_all_orders()
+    return JSONResponse({"status": "cancelled", "count": count})
+
 @app.post("/api/reset")
 async def reset_account():
     # Use reset() method to preserve instance reference for broadcaster
@@ -150,6 +159,37 @@ async def update_settings(
 ):
     paper_engine.set_fees(fees_enabled)
     return JSONResponse({"status": "updated", "fees_enabled": fees_enabled})
+
+@app.post("/api/backtest")
+async def run_backtest():
+    """
+    Triggers a backtest simulation on historical data.
+    """
+    global backtest_running
+    if backtest_running:
+        return JSONResponse({"status": "running", "message": "Backtest already in progress"})
+        
+    try:
+        backtest_running = True
+        # Check if data exists, if not, download sample
+        data_path = "backtest_data/BTCUSDT_trades_snapshot.csv"
+        if not os.path.exists(data_path):
+             # Trigger download (synchronously for now as it's a demo)
+             import download_data
+             download_data.download_trades_snapshot("BTCUSDT")
+        
+        bt = BacktesterV2(data_path)
+        bt.load_data()
+        
+        # Run Fast Backtest
+        results = bt.run_fast_backtest()
+        
+        backtest_running = False
+        return JSONResponse({"status": "completed", "results": results})
+        
+    except Exception as e:
+        backtest_running = False
+        return JSONResponse({"status": "error", "message": str(e)})
 
 @app.get("/")
 async def root():

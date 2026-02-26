@@ -216,7 +216,23 @@ class PaperTradingEngine:
                             order.processed_volume += qty
                             if order.processed_volume > order.quantity:
                                 self._finalize_fill(order, order.quantity, order.price, is_maker=True)
-                                self.open_orders.remove(oid)
+                                if oid in self.open_orders: self.open_orders.remove(oid)
+
+    def cancel_order(self, order_id: str):
+        if order_id in self.open_orders:
+            self.open_orders.remove(order_id)
+            self.orders[order_id].status = OrderStatus.CANCELLED
+            print(f"[PaperTrade] CANCELLED {order_id}")
+            return True
+        return False
+
+    def cancel_all_orders(self):
+        count = len(self.open_orders)
+        for order_id in list(self.open_orders):
+            self.orders[order_id].status = OrderStatus.CANCELLED
+        self.open_orders.clear()
+        print(f"[PaperTrade] CANCELLED {count} orders")
+        return count
 
     def _finalize_fill(self, order: Order, qty: float, price: float, is_maker: bool):
         fee_rate = self.maker_fee if is_maker else self.taker_fee

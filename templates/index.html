@@ -41,34 +41,57 @@
                 <!-- Hero Metrics -->
                 <div class="hero-metrics-grid">
                     <div class="hero-metric">
-                        <div class="hero-label" data-tooltip="Spread cost">Spread</div>
+                        <div class="hero-label" data-tooltip="The cost to cross the spread">Spread</div>
                         <div id="spread" class="hero-value" style="font-size: 18px; color: #8b949e;">--</div>
                     </div>
                     <div class="hero-metric">
-                        <div class="hero-label">Mid Price</div>
+                        <div class="hero-label" data-tooltip="Midpoint between best bid and ask">Mid Price</div>
                         <div id="mid" class="hero-value" style="color: #58a6ff;">--</div>
                     </div>
                     <div class="hero-metric">
-                        <div class="hero-label">Microprice</div>
+                        <div class="hero-label" data-tooltip="Volume-weighted price forecast">Microprice</div>
                         <div id="micro" class="hero-value" style="color: #e3b341;">--</div>
                     </div>
                     <div class="hero-metric">
-                        <div class="hero-label">Imbalance</div>
-                        <div id="imb" class="hero-value">--</div>
-                    </div>
-                    <div class="hero-metric">
-                        <div class="hero-label">OFI (50)</div>
+                        <div class="hero-label" data-tooltip="Order Flow Imbalance (Pressure)">OFI (50)</div>
                         <div id="ofi" class="hero-value">--</div>
                     </div>
-                    <div class="hero-metric">
-                        <div class="hero-label">CVD</div>
-                        <div id="cvd" class="hero-value">--</div>
+                </div>
+
+                <!-- Market Vitals -->
+                <div class="vitals-grid">
+                    <div class="vital-card">
+                         <div class="vital-label" data-tooltip="Order Book Imbalance">Book Skew</div>
+                         <div id="imb" class="vital-value">--</div>
+                         <div class="imbalance-container" style="height: 4px; margin-top: 5px; background: #21262d;">
+                            <div id="imb-bar" class="imbalance-bar"></div>
+                        </div>
+                    </div>
+                    <div class="vital-card">
+                        <div class="vital-label" data-tooltip="Cumulative Volume Delta">CVD</div>
+                        <div id="cvd" class="vital-value">--</div>
+                    </div>
+                     <div class="vital-card">
+                        <div class="vital-label" data-tooltip="Arrival Rate (Orders/sec)">Intensity</div>
+                        <div id="intensity" class="vital-value">--</div>
+                    </div>
+                     <div class="vital-card">
+                        <div class="vital-label" data-tooltip="Volatility (ATR Proxy)">Vol (1m)</div>
+                        <div id="volatility" class="vital-value">--</div>
                     </div>
                 </div>
-                
-                <!-- Pressure Bar -->
-                <div class="imbalance-container" style="height: 4px; margin-top: 5px; background: #21262d;">
-                    <div id="imb-bar" class="imbalance-bar"></div>
+
+                <!-- Backtest Section -->
+                <div class="backtest-section">
+                    <div class="chart-title">Strategy Backtest</div>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button id="run-backtest-btn" class="glow-btn" style="flex: 1; padding: 10px; background: #1f6feb; border: none; border-radius: 4px; color: white; cursor: pointer; font-weight: bold;">
+                            Run Week Backtest
+                        </button>
+                    </div>
+                    <div id="backtest-results" style="margin-top: 10px; font-size: 11px; color: #8b949e; display: none;">
+                        Running simulation on historical data...
+                    </div>
                 </div>
             </div>
         </div>
@@ -103,10 +126,9 @@
                 
                 <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
                     <div style="display: flex; gap: 10px;">
-                        <div style="display: flex; align-items: center; gap: 4px;">
-                           <input type="checkbox" id="auto-trade-toggle" style="cursor: pointer;">
-                           <label for="auto-trade-toggle" style="font-size: 11px; color: #8b949e; cursor: pointer;">HFT Auto</label>
-                        </div>
+                        <button id="auto-trade-btn" onclick="toggleAutoTrade()" style="background: #21262d; border: 1px solid #30363d; color: #8b949e; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 5px;">
+                            <span class="status-dot" style="background: #30363d; width: 6px; height: 6px;"></span> HFT Auto
+                        </button>
                         <div style="display: flex; align-items: center; gap: 4px;">
                            <input type="checkbox" id="fees-toggle" style="cursor: pointer;" checked>
                            <label for="fees-toggle" style="font-size: 11px; color: #8b949e; cursor: pointer;">Fees</label>
@@ -148,6 +170,6 @@
         </div>
     </div>
     
-    <script src="/static/app.js?v=5"></script>
+    <script src="/static/app.js?v=6"></script>
 </body>
 </html>

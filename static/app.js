@@ -10,6 +10,7 @@ let lastTradeTime = 0;
 const TRADE_COOLDOWN = 500; // 500ms cooldown for HFT
 const MAX_POSITION = 0.5;   // Increased Max inventory constraint
 let tradeMarkers = []; // Store chart markers for trades
+let latestData = null; // Store latest market data for order pricing
 
 // Elements
 const els = {
@@ -19,6 +20,8 @@ const els = {
     imb: document.getElementById('imb'),
     ofi: document.getElementById('ofi'),
     cvd: document.getElementById('cvd'),
+    intensity: document.getElementById('intensity'),
+    volatility: document.getElementById('volatility'),
     imbBar: document.getElementById('imb-bar'),
     asks: document.getElementById('asks-container'),
     bids: document.getElementById('bids-container'),
@@ -31,30 +34,107 @@ const els = {
     // Paper Trading Elements
     ptUsd: document.getElementById('pt-usd'),
     ptBtc: document.getElementById('pt-btc'),
-    ptEquity: document.getElementById('pt-equity')
+    ptEquity: document.getElementById('pt-equity'),
+    // Buttons
+    autoTradeBtn: document.getElementById('auto-trade-btn'),
+    backtestBtn: document.getElementById('run-backtest-btn'),
+    backtestResults: document.getElementById('backtest-results')
 };
+
+// --- Backtesting Logic ---
+if (els.backtestBtn) {
+    els.backtestBtn.addEventListener('click', async () => {
+        els.backtestResults.style.display = 'block';
+        els.backtestResults.innerHTML = '<span style="color:#e3b341">Running simulation... this may take a moment.</span>';
+        
+        try {
+            const res = await fetch('/api/backtest', {method: 'POST'});
+            const data = await res.json();
+            
+            if (data.status === 'completed') {
+                const r = data.results;
+                els.backtestResults.innerHTML = `
+                    <div style="color:#7ee787; font-weight:bold; margin-bottom:5px;">Simulation Complete</div>
+                    <div>Return: <span style="color:${r.total_return_pct >= 0 ? '#7ee787' : '#da3633'}">${r.total_return_pct.toFixed(2)}%</span></div>
+                    <div>Sharpe: ${r.sharpe_ratio.toFixed(2)}</div>
+                    <div>Max DD: ${r.max_drawdown.toFixed(2)}%</div>
+                `;
+            } else if (data.status === 'running') {
+                els.backtestResults.innerHTML = '<span style="color:#e3b341">Backtest already running...</span>';
+            } else {
+                els.backtestResults.innerHTML = `<span style="color:#da3633">Error: ${data.message}</span>`;
+            }
+        } catch (e) {
+             els.backtestResults.innerHTML = `<span style="color:#da3633">Network Error: ${e.message}</span>`;
+        }
+    });
+}
+
+function toggleAutoTrade() {
+    autoTradeEnabled = !autoTradeEnabled;
+    const btn = els.autoTradeBtn;
+    const dot = btn.querySelector('.status-dot');
+    
+    if (autoTradeEnabled) {
+        btn.style.borderColor = '#238636';
+        btn.style.color = '#f0f6fc';
+        dot.style.background = '#238636';
+        dot.style.boxShadow = '0 0 5px #238636';
+    } else {
+        btn.style.borderColor = '#30363d';
+        btn.style.color = '#8b949e';
+        dot.style.background = '#30363d';
+        dot.style.boxShadow = 'none';
+    }
+    console.log("Auto-Trading:", autoTradeEnabled ? "ON" : "OFF");
+}
 
 const askRows = [];
 const bidRows = [];
 
 // --- Paper Trading Logic ---
-async function placeOrder(side) {
+async function placeOrder(side, orderType = 'MARKET', quantity = 0.01) {
+    let price = 0.0;
+    
+    // For Limit Orders, calculate Maker price
+    if (orderType === 'LIMIT') {
+        if (!latestData || !latestData.metrics) {
+            console.error("No market data for limit price");
+            return;
+        }
+        // Maker Strategy: Join the Best Bid/Ask
+        if (side === 'buy') {
+            if (latestData.bids && latestData.bids.length > 0) {
+                price = latestData.bids[0][0];
+            } else {
+                price = latestData.metrics.mid - latestData.metrics.spread/2;
+            }
+        } else {
+            if (latestData.asks && latestData.asks.length > 0) {
+                price = latestData.asks[0][0];
+            } else {
+                price = latestData.metrics.mid + latestData.metrics.spread/2;
+            }
+        }
+    }
+
     try {
         const res = await fetch('/api/order', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 side: side,
-                quantity: 0.01, // Small size for auto-trading
-                order_type: 'MARKET'
+                quantity: quantity,
+                order_type: orderType,
+                price: price
             })
         });
         const data = await res.json();
         if (data.error) showError(data.error);
         else {
-            console.log("Order Placed:", data.order_id);
-            // Add Trade Marker
-            if (midSeries) {
+            console.log(`Order Placed: ${side} ${orderType} ${quantity} @ ${price}`);
+            // Add Trade Marker only for Market Orders (assumed fill)
+            if (orderType === 'MARKET' && midSeries) {
                 const now = Math.floor(Date.now() / 1000);
                 tradeMarkers.push({
                     time: now,
@@ -64,7 +144,6 @@ async function placeOrder(side) {
                     size: 0.5,
                     text: ''
                 });
-                // Ensure sorted by time
                 tradeMarkers.sort((a, b) => a.time - b.time);
                 try {
                     midSeries.setMarkers(tradeMarkers);
@@ -76,10 +155,22 @@ async function placeOrder(side) {
     }
 }
 
+async function cancelAllOrders() {
+    try {
+        await fetch('/api/cancel_all', {method: 'POST'});
+    } catch (e) {
+        console.error("Cancel Failed", e);
+    }
+}
+
 async function resetAccount() {
     if(!confirm("Reset Paper Trading Account?")) return;
+    
+    if (autoTradeEnabled) toggleAutoTrade();
+
     try {
         await fetch('/api/reset', {method: 'POST'});
+        showError("Account Reset");
     } catch (e) {
         showError("Reset Failed: " + e.message);
     }
@@ -249,6 +340,7 @@ function onMessage(event) {
 }
 
 function updateUI(data) {
+    latestData = data;
     const m = data.metrics;
     const now = Math.floor(Date.now() / 1000);
 
@@ -407,7 +499,7 @@ function updateInsights(data) {
         </div>
     `;
 
-    // --- Auto-Trading Logic (HFT Style) ---
+    // --- Auto-Trading Logic (HFT Maker Strategy) ---
     const now = Date.now();
     if (autoTradeEnabled && (now - lastTradeTime > TRADE_COOLDOWN)) {
         
@@ -418,45 +510,46 @@ function updateInsights(data) {
         }
 
         // 2. Define Signal Strength
-        // OFI gives directional pressure (-10 to +10 typically)
-        // Skew gives microprice deviation (-1 to +1 typically)
         const skew = m.micro - m.mid;
-        
-        // HFT Logic: Chase the Microprice Skew heavily
         let signal = 0;
-        if (Math.abs(skew) > 0.1) signal += skew * 5; // Strong weight on microprice
-        if (Math.abs(m.ofi) > 3) signal += m.ofi * 0.1; // Moderate weight on OFI
+        if (Math.abs(skew) > 0.1) signal += skew * 5; 
+        if (Math.abs(m.ofi) > 3) signal += m.ofi * 0.1;
 
         const THRESHOLD = 0.5;
 
-        // 3. Execution Logic with Inventory Controls
-        if (signal > THRESHOLD) {
-            // Bullish Signal
-            if (currentPos < MAX_POSITION) {
-                placeOrder('buy');
-                lastTradeTime = now;
-                console.log(`HFT: BUY (Signal: ${signal.toFixed(2)}, Pos: ${currentPos.toFixed(3)})`);
-            }
-        } else if (signal < -THRESHOLD) {
-            // Bearish Signal
-            if (currentPos > -MAX_POSITION) {
-                placeOrder('sell');
-                lastTradeTime = now;
-                console.log(`HFT: SELL (Signal: ${signal.toFixed(2)}, Pos: ${currentPos.toFixed(3)})`);
-            }
-        } else {
-            // Neutral Signal - Inventory Management / Mean Reversion
-            // If we are holding a position and signal is weak, close it to free up capital
-            if (Math.abs(currentPos) > 0.001) {
-                if (currentPos > 0) {
-                    placeOrder('sell'); // Close Long
-                    lastTradeTime = now;
-                    console.log("HFT: Closing Long (Signal Weak)");
-                } else {
-                    placeOrder('buy'); // Close Short
-                    lastTradeTime = now;
-                    console.log("HFT: Closing Short (Signal Weak)");
+        // Fixed Size
+        const size = 0.01;
+
+        // 3. Execution Logic
+        if (Math.abs(signal) > THRESHOLD) {
+            // Strong Signal -> Taker Trade
+            if (signal > 0) {
+                // Bullish -> Buy
+                if (currentPos < MAX_POSITION) {
+                    placeOrder('buy', 'MARKET', size);
+                    console.log(`HFT Taker: BUY ${size.toFixed(4)} (Signal: ${signal.toFixed(2)})`);
                 }
+            } else {
+                // Bearish -> Sell
+                if (currentPos > -MAX_POSITION) {
+                    placeOrder('sell', 'MARKET', size);
+                    console.log(`HFT Taker: SELL ${size.toFixed(4)} (Signal: ${signal.toFixed(2)})`);
+                }
+            }
+            lastTradeTime = now;
+            
+        } else {
+            // Neutral -> Inventory Management
+            if (Math.abs(currentPos) > 0.1) { // Only if exposure is significant
+                // Close position slowly using Market Orders
+                if (currentPos > 0) {
+                    placeOrder('sell', 'MARKET', 0.01); 
+                    console.log("HFT Taker: Unwinding Long");
+                } else {
+                    placeOrder('buy', 'MARKET', 0.01);
+                    console.log("HFT Taker: Unwinding Short");
+                }
+                lastTradeTime = now;
             }
         }
     }
