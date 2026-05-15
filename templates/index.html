@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Microstructure Ladder</title>
+    <!-- Lightweight Charts for Price Chart with Fallback -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js" 
+            onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.1/lightweight-charts.standalone.production.min.js';"></script>
+    <link rel="stylesheet" href="/static/style.css?v=4">
+</head>
+<body>
+    <div id="error-banner"></div>
+
+    <div class="dashboard-grid">
+        <!-- LEFT COLUMN: Main Visuals -->
+        <div class="main-column">
+            <!-- Top: Price Chart -->
+            <div class="chart-panel">
+                <div class="chart-title">
+                    BTC/USDT Real-Time
+                    <span style="font-weight: normal; color: #8b949e; font-size: 11px;">
+                        <span style="color: #58a6ff">● Mid</span> | 
+                        <span style="color: #e3b341">● Micro</span>
+                    </span>
+                    <div class="status-container">
+                        <span id="status-indicator" class="status-dot status-disconnected"></span>
+                        <span id="status-text" class="status-tooltip">Disconnected</span>
+                    </div>
+                </div>
+                <div id="price-chart"></div>
+            </div>
+
+            <!-- Bottom: Metrics Deck -->
+            <div class="metrics-panel">
+                <!-- Insights Ticker -->
+                <div id="insights-text" class="insights-ticker">
+                    System Initializing... Waiting for market data.
+                </div>
+
+                <!-- Hero Metrics -->
+                <div class="hero-metrics-grid">
+                    <div class="hero-metric">
+                        <div class="hero-label" data-tooltip="The difference between best ask and best bid prices. Tighter is better.">Spread</div>
+                        <div id="spread" class="hero-value" style="font-size: 18px; color: #8b949e;">--</div>
+                    </div>
+                    <div class="hero-metric">
+                        <div class="hero-label" data-tooltip="The average of the best bid and best ask prices.">Mid Price</div>
+                        <div id="mid" class="hero-value" style="color: #58a6ff;">--</div>
+                    </div>
+                    <div class="hero-metric">
+                        <div class="hero-label" data-tooltip="Volume-weighted average price (VWAP) of the best bid and ask. Predicts short-term moves.">Microprice</div>
+                        <div id="micro" class="hero-value" style="color: #e3b341;">--</div>
+                    </div>
+                    <div class="hero-metric">
+                        <div class="hero-label" data-tooltip="Order Flow Imbalance: Net volume of limit orders added/removed at best price. + means buying pressure.">OFI (50)</div>
+                        <div id="ofi" class="hero-value">--</div>
+                    </div>
+                </div>
+
+                <!-- Market Vitals -->
+                <div class="vitals-grid">
+                    <div class="vital-card">
+                         <div class="vital-label" data-tooltip="Order Book Imbalance: Ratio of Bids vs Asks volume. >0 means more bids (bullish).">Book Skew</div>
+                         <div id="imb" class="vital-value">--</div>
+                         <div class="imbalance-container" style="height: 4px; margin-top: 5px; background: #21262d;">
+                            <div id="imb-bar" class="imbalance-bar"></div>
+                        </div>
+                    </div>
+                    <div class="vital-card">
+                        <div class="vital-label" data-tooltip="Cumulative Volume Delta: Net difference between aggressive buying and selling volume.">CVD</div>
+                        <div id="cvd" class="vital-value">--</div>
+                    </div>
+                     <div class="vital-card">
+                        <div class="vital-label" data-tooltip="Market Intensity: Total volume at the top 5 price levels. Shows market depth/activity.">Intensity</div>
+                        <div id="intensity" class="vital-value">--</div>
+                    </div>
+                     <div class="vital-card">
+                        <div class="vital-label" data-tooltip="Volatility: Standard Deviation of Mid Price over last 50 updates (bps).">Vol (1m)</div>
+                        <div id="volatility" class="vital-value">--</div>
+                    </div>
+                </div>
+
+                <!-- Backtest Section -->
+                <div class="backtest-section">
+                    <div class="chart-title">Strategy Backtest</div>
+                    <div style="font-size: 11px; color: #8b949e; margin-bottom: 8px; line-height: 1.4;">
+                        Simulates a mean-reversion strategy on the last 24h of 1s BTCUSDT data.
+                        <br>
+                        <strong>Strategy:</strong> Buy/Sell when price deviates 2σ from 50s Moving Average.
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 5px; align-items: center;">
+                        <button id="run-backtest-btn" class="glow-btn" style="flex: 1; padding: 10px; background: #1f6feb; border: none; border-radius: 4px; color: white; cursor: pointer; font-weight: bold;" title="Run simulation on 24 hours of 1-second resolution data">
+                            Run 24h 1s Backtest
+                        </button>
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                            <input type="checkbox" id="backtest-fees-toggle" checked>
+                            <label for="backtest-fees-toggle" style="font-size: 11px; color: #8b949e; cursor: pointer;">Fees (0.04%)</label>
+                        </div>
+                    </div>
+                    <div id="backtest-results" style="margin-top: 10px; font-size: 11px; color: #8b949e; display: none;">
+                        Running simulation on historical data...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Sidebar -->
+        <div class="sidebar-column">
+            <!-- Trading Panel -->
+            <div class="trading-panel">
+                <div class="intro-title" style="margin-bottom: 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">
+                    Paper Execution
+                </div>
+                
+                <div class="portfolio-grid" style="grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; background: transparent; padding: 0;">
+                    <div style="background: #161b22; padding: 8px; border-radius: 4px; border: 1px solid #30363d;">
+                        <div style="font-size: 10px; color: #8b949e;">USD Balance</div>
+                        <div id="pt-usd" style="font-size: 14px; font-weight: bold; color: #f0f6fc;">--</div>
+                    </div>
+                    <div style="background: #161b22; padding: 8px; border-radius: 4px; border: 1px solid #30363d;">
+                        <div style="font-size: 10px; color: #8b949e;">BTC Position</div>
+                        <div id="pt-btc" style="font-size: 14px; font-weight: bold; color: #f0f6fc;">--</div>
+                    </div>
+                </div>
+                <div style="margin-bottom: 12px; font-size: 12px; display: flex; justify-content: space-between; border-bottom: 1px dashed #30363d; padding-bottom: 8px;">
+                    <span style="color: #8b949e;">Total Equity</span>
+                    <span id="pt-equity" style="font-weight: bold; color: #7ee787;">--</span>
+                </div>
+
+                <div class="trade-controls" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <button onclick="placeOrder('buy')" class="glow-btn buy-btn">BUY 0.01</button>
+                    <button onclick="placeOrder('sell')" class="glow-btn sell-btn">SELL 0.01</button>
+                </div>
+                
+                <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; gap: 10px;">
+                        <button id="auto-trade-btn" onclick="toggleAutoTrade()" style="background: #21262d; border: 1px solid #30363d; color: #8b949e; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 5px;">
+                            <span class="status-dot" style="background: #30363d; width: 6px; height: 6px;"></span> HFT Auto
+                        </button>
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                           <input type="checkbox" id="fees-toggle" style="cursor: pointer;" checked>
+                           <label for="fees-toggle" style="font-size: 11px; color: #8b949e; cursor: pointer;">Fees</label>
+                        </div>
+                    </div>
+                    <button onclick="resetAccount()" style="background: transparent; border: 1px solid #30363d; color: #8b949e; font-size: 10px; padding: 2px 6px; border-radius: 4px; cursor: pointer;">Reset</button>
+                </div>
+            </div>
+
+            <!-- Ladder Panel -->
+            <div class="ladder-panel">
+                <div class="ladder-header" style="background: #161b22; padding: 8px 10px; margin: 0; border-bottom: 1px solid #30363d;">
+                    <div class="header-cell price">Price</div>
+                    <div class="header-cell size">Size</div>
+                    <div class="header-cell total">Depth</div>
+                </div>
+                <div id="ladder-visual" class="ladder" style="padding: 0;">
+                    <div id="asks-container"></div>
+                    <div class="spread-divider" id="spread-info" style="background: #0d1117; font-weight: bold; color: #f0f6fc; height: 30px;">--</div>
+                    <div id="bids-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- BOTTOM ROW: Heatmap -->
+        <div class="heatmap-row">
+            <div class="chart-title" style="margin-bottom: 5px;">
+                Market Depth Heatmap
+                <span style="font-weight: normal; font-size: 10px; color: #8b949e;">Rolling 20s Window</span>
+            </div>
+            <div style="flex-grow: 1; position: relative; min-height: 0;">
+                <canvas id="heatmap-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></canvas>
+            </div>
+            <div class="heatmap-legend" style="margin-top: 5px; padding: 4px; background: transparent;">
+                <div class="legend-item"><div class="color-box ask"></div> Ask Wall</div>
+                <div class="legend-item" style="font-size: 10px; color: #484f58;">TIME →</div>
+                <div class="legend-item"><div class="color-box bid"></div> Bid Wall</div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/app.js?v=8"></script>
+    
+    <!-- Custom Tooltip Logic -->
+    <div id="custom-tooltip" class="custom-tooltip"></div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const tooltip = document.getElementById('custom-tooltip');
+            const targets = document.querySelectorAll('[data-tooltip]');
+            
+            targets.forEach(target => {
+                target.addEventListener('mouseenter', (e) => {
+                    const text = target.getAttribute('data-tooltip');
+                    if (!text) return;
+                    
+                    tooltip.textContent = text;
+                    tooltip.classList.add('visible');
+                    
+                    // Position
+                    const rect = target.getBoundingClientRect();
+                    tooltip.style.left = rect.left + 'px';
+                    tooltip.style.top = (rect.bottom + 5) + 'px';
+                });
+                
+                target.addEventListener('mouseleave', () => {
+                    tooltip.classList.remove('visible');
+                });
+                
+                target.addEventListener('mousemove', (e) => {
+                     // Optional: Follow mouse if preferred, or keep static below element
+                     // tooltip.style.left = (e.pageX + 10) + 'px';
+                     // tooltip.style.top = (e.pageY + 10) + 'px';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
